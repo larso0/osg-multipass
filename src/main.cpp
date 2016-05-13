@@ -122,6 +122,12 @@ int main(int argc, char** argv)
 
 	//viewer.addSlave(quadCamera, false);
 	viewer.realize();
-	while (!viewer.done()) viewer.frame();
+	while (!viewer.done())
+	{
+		osg::Camera* mainCamera = viewer.getCamera();
+		texCamera->setViewMatrix(mainCamera->getViewMatrix());
+		texCamera->setProjectionMatrix(mainCamera->getProjectionMatrix());
+		viewer.frame();
+	}
 	return 0;
 }
