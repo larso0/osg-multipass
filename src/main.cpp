@@ -6,6 +6,8 @@
 #include <osg/Group>
 #include <osg/PositionAttitudeTransform>
 #include <osgGA/TrackballManipulator>
+#include <osgGA/GUIEventHandler>
+#include <functional>
 
 const int WINDOW_WIDTH = 512;
 const int WINDOW_HEIGHT = 512;
@@ -52,6 +54,28 @@ osg::ref_ptr<osg::Group> createScene()
 	addQuad(group.get(), osg::Vec3(0.f, 0.25f, -0.25f), osg::Vec4(0.f, 0.f, 1.f, 0.36f));
 	return group;
 }
+
+class WindowResizeHandler : public osgGA::GUIEventHandler
+{
+private:
+	std::function<void(int, int)> callback;
+public:
+	WindowResizeHandler(std::function<void(int, int)> callback) : callback(callback) {}
+
+	bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter&) override
+	{
+		switch (ea.getEventType())
+		{
+		case osgGA::GUIEventAdapter::RESIZE:
+			callback(ea.getWindowWidth(), ea.getWindowHeight());
+			break;
+		default:
+			break;
+		}
+
+		return false;
+	}
+};
 
 int main(int argc, char** argv)
 {
@@ -120,7 +144,12 @@ int main(int argc, char** argv)
 	quadCamera->addChild(quadGroup);
 	scene->addChild(quadCamera);
 
-	//viewer.addSlave(quadCamera, false);
+	viewer.addEventHandler(new WindowResizeHandler([&](int w, int h){
+		texture->setTextureSize(w, h);
+		texture->dirtyTextureObject();
+		texCamera->setRenderingCache(0);
+		texCamera->setViewport(0, 0, w, h);
+	}));
 	viewer.realize();
 	while (!viewer.done())
 	{
