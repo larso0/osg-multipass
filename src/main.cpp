@@ -5,9 +5,10 @@
 #include <osg/Geode>
 #include <osg/Group>
 #include <osg/PositionAttitudeTransform>
+#include <osgGA/TrackballManipulator>
 
-const int TEXTURE_WIDTH = 512;
-const int TEXTURE_HEIGHT = 512;
+const int WINDOW_WIDTH = 512;
+const int WINDOW_HEIGHT = 512;
 
 void addQuad(osg::Group* scene, osg::Vec3 position, osg::Vec4 color)
 {
@@ -56,21 +57,22 @@ int main(int argc, char** argv)
 {
 	osg::ref_ptr<osg::Camera> texCamera = new osg::Camera();
 	texCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
-	texCamera->setRenderOrder(osg::Camera::PRE_RENDER);
+	texCamera->setRenderOrder(osg::Camera::POST_RENDER);
 	texCamera->setProjectionMatrixAsPerspective(60.0, 1.0, 0.1, 100.0);
 	texCamera->setViewMatrixAsLookAt(osg::Vec3(0.f, 1.f, 4.f), osg::Vec3(0.f, 0.f, 0.f), osg::Vec3(0.f, 1.f, 0.f));
-	texCamera->setViewport(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+	texCamera->setViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
 	texCamera->setClearColor(osg::Vec4(0.5f, 0.5f, 0.5f, 1.f));
 	texCamera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	osg::ref_ptr<osg::Image> image = new osg::Image();
-	image->allocateImage(TEXTURE_WIDTH, TEXTURE_HEIGHT, 1, GL_RGBA, GL_UNSIGNED_BYTE);
+	image->allocateImage(WINDOW_WIDTH, WINDOW_HEIGHT, 1, GL_RGBA, GL_UNSIGNED_BYTE);
 	image->setInternalTextureFormat(GL_RGBA8);
 	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D(image);
 	texCamera->attach(osg::Camera::COLOR_BUFFER, texture.get());
 
-	osg::ref_ptr<osg::Group> texScene = createScene();
-	texCamera->addChild(texScene.get());
+	osg::ref_ptr<osg::Group> scene = new osg::Group();
+	osg::ref_ptr<osg::Group> transparentScene = createScene();
+	texCamera->addChild(transparentScene);
 
 	osg::ref_ptr<osg::Geode> quad = new osg::Geode();
 	osg::ref_ptr<osg::Geometry> quadGeometry = new osg::Geometry();
@@ -98,11 +100,28 @@ int main(int argc, char** argv)
 	quadGeometry->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLE_FAN, 0, 4));
 	quad->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
 
-	osg::ref_ptr<osg::Group> scene = new osg::Group();
-	scene->addChild(texCamera);
-	scene->addChild(quad);
+	osg::ref_ptr<osg::Group> quadGroup = new osg::Group();
+	quadGroup->addChild(texCamera);
+	quadGroup->addChild(quad);
 
 	osgViewer::Viewer viewer;
-	viewer.setSceneData(scene.get());
-	return viewer.run();
+	viewer.setUpViewInWindow(100, 100, WINDOW_WIDTH, WINDOW_HEIGHT);
+	viewer.setSceneData(scene);
+	viewer.setCameraManipulator(new osgGA::TrackballManipulator());
+	viewer.addSlave(texCamera, false);
+
+	osg::ref_ptr<osg::Camera> quadCamera = new osg::Camera();
+	quadCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
+	quadCamera->setRenderOrder(osg::Camera::POST_RENDER);
+	quadCamera->setViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+	quadCamera->setViewMatrix(osg::Matrixd());
+	quadCamera->setProjectionMatrix(osg::Matrixd());
+	quadCamera->setClearMask(0);
+	quadCamera->addChild(quadGroup);
+	scene->addChild(quadCamera);
+
+	//viewer.addSlave(quadCamera, false);
+	viewer.realize();
+	while (!viewer.done()) viewer.frame();
+	return 0;
 }
