@@ -7,7 +7,7 @@
 #include <osg/PositionAttitudeTransform>
 #include <osgGA/TrackballManipulator>
 #include <osgGA/GUIEventHandler>
-#include <functional>
+#include <stdexcept>
 
 const int WINDOW_WIDTH = 512;
 const int WINDOW_HEIGHT = 512;
@@ -55,22 +55,32 @@ osg::ref_ptr<osg::Group> createScene()
 	return group;
 }
 
-class WindowResizeHandler : public osgGA::GUIEventHandler
+class TextureResizeHandler : public osgGA::GUIEventHandler
 {
 private:
-	std::function<void(int, int)> callback;
+	osg::Texture2D* texture;
+	osg::Camera* texCamera;
+	osg::Camera* mainCamera;
 public:
-	WindowResizeHandler(std::function<void(int, int)> callback) : callback(callback) {}
+	TextureResizeHandler(osg::Texture2D* texture,
+						 osg::Camera* texCamera,
+						 osg::Camera* mainCamera) :
+	texture(texture), texCamera(texCamera), mainCamera(mainCamera)
+	{
+		if(!(texture && texCamera && mainCamera))
+			throw std::invalid_argument("Recieved nullptr.");
+	}
 
 	bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter&) override
 	{
-		switch (ea.getEventType())
+		if(ea.getEventType() == osgGA::GUIEventAdapter::RESIZE)
 		{
-		case osgGA::GUIEventAdapter::RESIZE:
-			callback(ea.getWindowWidth(), ea.getWindowHeight());
-			break;
-		default:
-			break;
+			int w = ea.getWindowWidth(), h = ea.getWindowHeight();
+			texture->setTextureSize(w, h);
+			texture->dirtyTextureObject();
+			texCamera->setRenderingCache(0);
+			texCamera->setViewport(0, 0, w, h);
+			texCamera->setProjectionMatrix(mainCamera->getProjectionMatrix());
 		}
 
 		return false;
@@ -88,10 +98,11 @@ int main(int argc, char** argv)
 	texCamera->setClearColor(osg::Vec4(0.5f, 0.5f, 0.5f, 1.f));
 	texCamera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	osg::ref_ptr<osg::Image> image = new osg::Image();
-	image->allocateImage(WINDOW_WIDTH, WINDOW_HEIGHT, 1, GL_RGBA, GL_UNSIGNED_BYTE);
-	image->setInternalTextureFormat(GL_RGBA8);
-	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D(image);
+	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D();
+	texture->setTextureSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+	texture->setSourceFormat(GL_RGBA);
+	texture->setSourceType(GL_UNSIGNED_BYTE);
+	texture->setInternalFormat(GL_RGBA8);
 	texCamera->attach(osg::Camera::COLOR_BUFFER, texture.get());
 
 	osg::ref_ptr<osg::Group> scene = new osg::Group();
@@ -144,18 +155,14 @@ int main(int argc, char** argv)
 	quadCamera->addChild(quadGroup);
 	scene->addChild(quadCamera);
 
-	viewer.addEventHandler(new WindowResizeHandler([&](int w, int h){
-		texture->setTextureSize(w, h);
-		texture->dirtyTextureObject();
-		texCamera->setRenderingCache(0);
-		texCamera->setViewport(0, 0, w, h);
-	}));
 	viewer.realize();
+	osg::Camera* mainCamera = viewer.getCamera();
+	viewer.addEventHandler(new TextureResizeHandler(texture, texCamera, mainCamera));
+	texCamera->setViewMatrix(mainCamera->getViewMatrix());
+	texCamera->setProjectionMatrix(mainCamera->getProjectionMatrix());
 	while (!viewer.done())
-	{
-		osg::Camera* mainCamera = viewer.getCamera();
+	{		
 		texCamera->setViewMatrix(mainCamera->getViewMatrix());
-		texCamera->setProjectionMatrix(mainCamera->getProjectionMatrix());
 		viewer.frame();
 	}
 	return 0;

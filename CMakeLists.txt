@@ -16,3 +16,7 @@ set(OSG_3RDPARTY_DIR "3rdparty" CACHE PATH "Path to OSG 3rd party dependencies")
 find_package(OpenSceneGraph REQUIRED osgDB osgViewer osgGA osgUtil osgText)
 include_directories(${OPENSCENEGRAPH_INCLUDE_DIRS})
 target_link_libraries(multipass ${OPENSCENEGRAPH_LIBRARIES})
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+    add_definitions(-std=gnu++11)
+endif()
