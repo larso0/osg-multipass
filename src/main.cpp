@@ -7,12 +7,13 @@
 #include <osg/PositionAttitudeTransform>
 #include <osgGA/TrackballManipulator>
 #include <osgGA/GUIEventHandler>
+#include <osg/Program>
 #include <stdexcept>
 
 const int WINDOW_WIDTH = 512;
 const int WINDOW_HEIGHT = 512;
 
-void addQuad(osg::Group* scene, osg::Vec3 position, osg::Vec4 color)
+void addQuad(osg::Group* scene, osg::Vec3 position, osg::Vec4 color, osg::Program* program)
 {
 	if (!scene) return;
 
@@ -29,14 +30,23 @@ void addQuad(osg::Group* scene, osg::Vec3 position, osg::Vec4 color)
 	osg::ref_ptr<osg::Vec4Array> colorArray;
 	osg::ref_ptr<osg::Geometry> quadGeometry;
 	quadGeometry = new osg::Geometry();
-	quadGeometry->setVertexArray(vertexArray);
 	colorArray = new osg::Vec4Array();
 	colorArray->push_back(color);
+	
+	quadGeometry->setVertexArray(vertexArray);
 	quadGeometry->setColorArray(colorArray);
 	quadGeometry->setColorBinding(osg::Geometry::BIND_OVERALL);
-	quadGeometry->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLE_FAN, 0, 4));
-	
+
 	osg::Geode* geode = new osg::Geode();
+	if (program)
+	{
+		osg::StateSet* stateSet = geode->getOrCreateStateSet();
+		stateSet->setAttributeAndModes(program, osg::StateAttribute::ON);
+		quadGeometry->setUseDisplayList(false);
+		quadGeometry->setUseVertexBufferObjects(true);
+	}
+
+	quadGeometry->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLE_FAN, 0, 4));
 	geode->addDrawable(quadGeometry);
 
 	osg::PositionAttitudeTransform* transform = new osg::PositionAttitudeTransform();
@@ -46,12 +56,12 @@ void addQuad(osg::Group* scene, osg::Vec3 position, osg::Vec4 color)
 	scene->addChild(transform);
 }
 
-osg::ref_ptr<osg::Group> createScene()
+osg::ref_ptr<osg::Group> createScene(osg::Program* program)
 {
 	osg::ref_ptr<osg::Group> group = new osg::Group();
-	addQuad(group.get(), osg::Vec3(-0.25f, 0.f, 0.f), osg::Vec4(1.f, 0.f, 0.f, 0.5f));
-	addQuad(group.get(), osg::Vec3(0.25f, 0.f, 0.25f), osg::Vec4(0.f, 1.f, 0.f, 0.3f));
-	addQuad(group.get(), osg::Vec3(0.f, 0.25f, -0.25f), osg::Vec4(0.f, 0.f, 1.f, 0.36f));
+	addQuad(group.get(), osg::Vec3(-0.25f, 0.f, 0.f), osg::Vec4(1.f, 0.f, 0.f, 0.5f), program);
+	addQuad(group.get(), osg::Vec3(0.25f, 0.f, 0.25f), osg::Vec4(0.f, 1.f, 0.f, 0.3f), program);
+	addQuad(group.get(), osg::Vec3(0.f, 0.25f, -0.25f), osg::Vec4(0.f, 0.f, 1.f, 0.36f), program);
 	return group;
 }
 
@@ -87,6 +97,18 @@ public:
 	}
 };
 
+osg::ref_ptr<osg::Program> loadBlendProgram()
+{
+	osg::ref_ptr<osg::Program> program = new osg::Program();
+	osg::ref_ptr<osg::Shader> vShader = osg::Shader::readShaderFile(osg::Shader::VERTEX, "../shaders/blendVertexShader.glsl");
+	osg::ref_ptr<osg::Shader> fShader = osg::Shader::readShaderFile(osg::Shader::FRAGMENT, "../shaders/blendFragmentShader.glsl");
+	program->addShader(vShader);
+	program->addShader(fShader);
+	program->addBindAttribLocation("pos", 0);
+	program->addBindAttribLocation("color", 3);
+	return program;
+}
+
 int main(int argc, char** argv)
 {
 	osg::ref_ptr<osg::Camera> texCamera = new osg::Camera();
@@ -95,7 +117,7 @@ int main(int argc, char** argv)
 	texCamera->setProjectionMatrixAsPerspective(60.0, 1.0, 0.1, 100.0);
 	texCamera->setViewMatrixAsLookAt(osg::Vec3(0.f, 1.f, 4.f), osg::Vec3(0.f, 0.f, 0.f), osg::Vec3(0.f, 1.f, 0.f));
 	texCamera->setViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-	texCamera->setClearColor(osg::Vec4(0.5f, 0.5f, 0.5f, 1.f));
+	texCamera->setClearColor(osg::Vec4(0.5f, 0.5f, 0.5f, 0.f));
 	texCamera->setClearMask(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	osg::ref_ptr<osg::Texture2D> texture = new osg::Texture2D();
@@ -105,8 +127,10 @@ int main(int argc, char** argv)
 	texture->setInternalFormat(GL_RGBA8);
 	texCamera->attach(osg::Camera::COLOR_BUFFER, texture.get());
 
+	osg::ref_ptr<osg::Program> blendProgram = loadBlendProgram();
+
 	osg::ref_ptr<osg::Group> scene = new osg::Group();
-	osg::ref_ptr<osg::Group> transparentScene = createScene();
+	osg::ref_ptr<osg::Group> transparentScene = createScene(blendProgram.get());
 	texCamera->addChild(transparentScene);
 
 	osg::ref_ptr<osg::Geode> quad = new osg::Geode();
@@ -157,6 +181,9 @@ int main(int argc, char** argv)
 
 	viewer.realize();
 	osg::Camera* mainCamera = viewer.getCamera();
+	osg::State* state = mainCamera->getGraphicsContext()->getState();
+	state->setUseModelViewAndProjectionUniforms(true);
+	state->setUseVertexAttributeAliasing(true);
 	viewer.addEventHandler(new TextureResizeHandler(texture, texCamera, mainCamera));
 	texCamera->setViewMatrix(mainCamera->getViewMatrix());
 	texCamera->setProjectionMatrix(mainCamera->getProjectionMatrix());
