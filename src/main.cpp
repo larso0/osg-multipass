@@ -44,6 +44,8 @@ void addQuad(osg::Group* scene, osg::Vec3 position, osg::Vec4 color, osg::Progra
 		stateSet->setAttributeAndModes(program, osg::StateAttribute::ON);
 		quadGeometry->setUseDisplayList(false);
 		quadGeometry->setUseVertexBufferObjects(true);
+		quadGeometry->setVertexAttribArray(3, colorArray);
+		quadGeometry->setVertexAttribBinding(3, osg::Geometry::BIND_OVERALL);
 	}
 
 	quadGeometry->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLE_FAN, 0, 4));
@@ -100,8 +102,8 @@ public:
 osg::ref_ptr<osg::Program> loadBlendProgram()
 {
 	osg::ref_ptr<osg::Program> program = new osg::Program();
-	osg::ref_ptr<osg::Shader> vShader = osg::Shader::readShaderFile(osg::Shader::VERTEX, "../shaders/blendVertexShader.glsl");
-	osg::ref_ptr<osg::Shader> fShader = osg::Shader::readShaderFile(osg::Shader::FRAGMENT, "../shaders/blendFragmentShader.glsl");
+	osg::ref_ptr<osg::Shader> vShader = osg::Shader::readShaderFile(osg::Shader::VERTEX, "shaders/blendVertexShader.glsl");
+	osg::ref_ptr<osg::Shader> fShader = osg::Shader::readShaderFile(osg::Shader::FRAGMENT, "shaders/blendFragmentShader.glsl");
 	program->addShader(vShader);
 	program->addShader(fShader);
 	program->addBindAttribLocation("pos", 0);
